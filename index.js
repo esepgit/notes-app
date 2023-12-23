@@ -1,10 +1,12 @@
+if(process.env.NODE_ENV !== 'production') {
+    require('dotenv').config()
+}
 const express = require('express')
 const app = express()
 const cors = require('cors')
-require('dotenv').config()
 const Note = require('./models/note')
 
-const requestLogger = (request, response, next) => {
+const logger = (request, response, next) => {
     console.log('Method:', request.method);
     console.log('Path: ', request.path);
     console.log('Body: ', request.body);
@@ -14,7 +16,7 @@ const requestLogger = (request, response, next) => {
 
 app.use(express.static('build'))
 app.use(express.json())
-app.use(requestLogger)
+app.use(logger)
 app.use(cors())
 
 let notes = [
@@ -47,21 +49,20 @@ app.delete('/api/notes/:id', (request, response, next) => {
 })
 
 //Create
-app.post('/api/notes', (request, response) => {
+app.post('/api/notes', (request, response, next) => {
     const body = request.body
-
-    if(body.content === undefined) {
-        return response.status(400).json({error: 'content missing'})
-    }
 
     const note = new Note ({
             content: body.content,
             important: body.important || false,
+            date: new Date(),
         })
 
-    note.save().then(savedNote => {
-        response.json(savedNote)
+    note.save()
+    .then(savedNote => {
+        response.json(savedNote.toJSON())
     })
+    .catch(error => next(error))
 })
 
 app.put('/api/notes/:id', (request, response, next) => {
@@ -90,6 +91,8 @@ const errorHandler = (error, request, response, next) => {
 
     if(error.name === 'CastError') {
         return response.status(400).send({ error: 'malformatted id' })
+    } else if(error.name === 'ValidationError') {
+        return response.status(400).json({ error: error.message })
     }
     next(error)
 }
